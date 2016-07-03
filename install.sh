@@ -25,6 +25,7 @@ cd queryparser
 if ! test -f queryparser
 then
     echo Build PostgreSQL...
+    # NOTE: happened to get e18ecb8dd973a169062b1a528aa1fbc160b2e3eb
     test -d postgresql || git clone --depth 1 https://github.com/pganalyze/postgres.git postgresql
     cd postgresql
     if ! test -d ./src/backend/postgres
