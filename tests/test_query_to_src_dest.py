@@ -1,9 +1,21 @@
 
 import unittest
-from nose.tools import eq_
+from nose.tools import eq_, assert_raises
 
 from pgflow import Stmt, sql2json
 
+
+
+class TestSql2Json(unittest.TestCase):
+
+    def test_none(self):
+        assert_raises(TypeError, sql2json, None)
+
+    def test_empty(self):
+        self.assertEqual(None, sql2json(''))
+
+    def test_invalid_sql(self):
+        self.assertEqual(None, sql2json('invalid'))
 
 
 class TestQuery2Stmt(unittest.TestCase):
@@ -17,7 +29,6 @@ class TestQuery2Stmt(unittest.TestCase):
         self.assertEqual(repr(s), """\
 Update:
   fromClause: FromClause:
-      []
   relation: RangeVar:
       inhOpt: 2
       location: 7
@@ -33,7 +44,7 @@ Update:
   ]
 """)
         self.assertEqual(s.maybe_src_dest(), True)
-        self.assertEqual(s.get_src(), None)
+        self.assertEqual(s.get_src(), [])
         self.assertEqual(s.get_dest(), ['foo'])
 
     def test_update_select_1(self):
@@ -94,7 +105,6 @@ Update:
 Select:
   all: False
   fromClause: FromClause:
-      []
   op: 0
   targetList: [
     ResTarget:
@@ -106,7 +116,6 @@ Select:
       subselect: Select:
           all: False
           fromClause: FromClause:
-              []
           op: 0
           targetList: [
             ResTarget:
@@ -115,6 +124,7 @@ Select:
                   location: 27
                   val: 2
           ]
+          valuesLists: ValuesLists:
       testexpr: None
     ResTarget:
       location: 7
@@ -125,7 +135,6 @@ Select:
       subselect: Select:
           all: False
           fromClause: FromClause:
-              []
           op: 0
           targetList: [
             ResTarget:
@@ -134,12 +143,30 @@ Select:
                   location: 15
                   val: 1
           ]
+          valuesLists: ValuesLists:
       testexpr: None
   ]
+  valuesLists: ValuesLists:
 """)
         self.assertEqual(s.maybe_src_dest(), False)
-        self.assertEqual(s.get_src(), None)
-        self.assertEqual(s.get_dest(), None)
+        self.assertEqual(s.get_src(), [])
+        self.assertEqual(s.get_dest(), [])
+
+    def test_insert_into_values_raw(self):
+        tree = sql2json('insert into t1 values (1)')
+        s = Stmt.from_tree(tree[0])
+        print(s)
+        self.assertEqual(s.maybe_src_dest(), True)
+        self.assertEqual(s.get_src(), [])
+        self.assertEqual(s.get_dest(), ['t1'])
+
+    def test_insert_into_values_subselect(self):
+        tree = sql2json('insert into t1 values ((select 1 from t2))')
+        s = Stmt.from_tree(tree[0])
+        print(s)
+        self.assertEqual(s.maybe_src_dest(), True)
+        self.assertEqual(s.get_src(), ['t2'])
+        self.assertEqual(s.get_dest(), ['t1'])
 
     def test_insert_into_select_star_1(self):
         tree = sql2json('insert into t1 select * from t2')
@@ -172,10 +199,19 @@ InsertInto:
               ]
               location: 22
       ]
+      valuesLists: ValuesLists:
 """)
         self.assertEqual(s.maybe_src_dest(), True)
         self.assertEqual(s.get_src(), ['t2'])
         self.assertEqual(s.get_dest(), ['t1'])
+
+    def test_create_view_1(self):
+        tree = sql2json('create view v1 as select x, y, z from t1 join t2 using (foo_id) left join t3 using (bar_id)')
+        s = Stmt.from_tree(tree[0])
+        print(s)
+        self.assertEqual(s.maybe_src_dest(), True)
+        self.assertEqual(s.get_src(), ['t1', 't2', 't3'])
+        self.assertEqual(s.get_dest(), ['v1'])
 
     def test_create_matview_cte_1(self):
         sql = 'create materialized view matview as with a as (select t1."id" id_alias from table1 t1), b as (select 2) select * from a union all select * from b;'
@@ -196,7 +232,6 @@ CreateTableAs:
   query: Select:
       all: True
       fromClause: FromClause:
-          []
       larg: Select:
           all: False
           fromClause: FromClause:
@@ -217,6 +252,7 @@ CreateTableAs:
                   ]
                   location: 111
           ]
+          valuesLists: ValuesLists:
       op: 1
       rarg: Select:
           all: False
@@ -238,6 +274,8 @@ CreateTableAs:
                   ]
                   location: 137
           ]
+          valuesLists: ValuesLists:
+      valuesLists: ValuesLists:
       withClause: WithClause:
           ctes: [
             CommonTableExpr:
@@ -266,6 +304,7 @@ CreateTableAs:
                           ]
                           location: 54
                   ]
+                  valuesLists: ValuesLists:
               cterecursive: False
               cterefcount: 0
               location: 41
@@ -274,7 +313,6 @@ CreateTableAs:
               ctequery: Select:
                   all: False
                   fromClause: FromClause:
-                      []
                   op: 0
                   targetList: [
                     ResTarget:
@@ -283,6 +321,7 @@ CreateTableAs:
                           location: 101
                           val: 2
                   ]
+                  valuesLists: ValuesLists:
               cterecursive: False
               cterefcount: 0
               location: 88
@@ -330,6 +369,15 @@ CreateTableAs:
         self.assertEqual(s.maybe_src_dest(), True)
         self.assertEqual(s.get_src(), ['table1'])
         self.assertEqual(s.get_dest(), ['matview'])
+
+    def test_matview_refresh(self):
+        sql = 'refresh materialized view v1;'
+        tree = sql2json(sql)
+        s = Stmt.from_tree(tree[0])
+        print(s)
+        self.assertEqual(s.maybe_src_dest(), True)
+        self.assertEqual(s.get_src(), [])
+        self.assertEqual(s.get_dest(), ['v1'])
 
 
 class TestQuery2Json(unittest.TestCase):

@@ -1,5 +1,5 @@
 
-from .util import flatten
+from .util import flatten, flatten1
 
 
 def sql2json(sqlstr):
@@ -27,6 +27,17 @@ class Stmt:
 
     tree = None
 
+    def __init__(self, tree):
+        if isinstance(tree, dict):
+            tree_ = {k: Stmt.from_tree_key(k, v) for k, v in tree.items()}
+            for k, v in tree_.items():
+                setattr(self, k, v)
+        elif isinstance(tree, list):
+            tree_ = [Stmt.from_tree(t) for t in tree]
+        else:
+            tree_ = tree
+        self.tree = tree_
+
     @staticmethod
     def from_tree(tree):
         # print('from_tree', tree)
@@ -49,43 +60,43 @@ class Stmt:
         # print('from_tree_key', k, v)
         c = Stmt.kwclass.get(k)
         if c:
-            s = c(v)
+            return c(v)
         elif isinstance(v, list):
             return [Stmt.from_tree(t) for t in v]
         elif isinstance(v, dict):
-            s = Stmt.kwclass.get(k, Stmt.from_tree)(v)
-        else:
-            s = v
-        return s
-
-    def __init__(self, tree):
-        if isinstance(tree, dict):
-            tree_ = {k: Stmt.from_tree_key(k, v) for k, v in tree.items()}
-            for k, v in tree_.items():
-                setattr(self, k, v)
-        elif isinstance(tree, list):
-            tree_ = [Stmt.from_tree(t) for t in tree]
-        else:
-            tree_ = tree
-        self.tree = tree_
+            return Stmt.kwclass.get(k, Stmt.from_tree)(v)
+        return v
 
     def maybe_src_dest(self):
         return False
 
     def get_src(self):
-        return None
+        return []
 
     def get_dest(self):
-        return None
+        return []
 
     def __repr__(self):
         return self.dump()
 
+    def dumplist(self, v, indent=0):
+        indents = '  '
+        indentstr = indents * indent
+        s = '[\n'
+        if all(isinstance(x, Stmt) for x in v):
+            for x in sorted(v, key=repr):
+                s += indentstr + indents + x.dump(indent=indent+1)
+        else:
+            for x in v:
+                s += indentstr + indents + repr(x) + '\n'
+        s += indentstr + ']\n'
+        return s
+
     def dump(self, indent=0):
-        indentstr = ' ' * 2 * indent
-        s = '{}:\n'.format(self.__class__.__name__)
+        indents = '  '
         indent += 1
-        indentstr = indentstr + '  '
+        indentstr = indents * indent
+        s = self.__class__.__name__ + ':\n'
         if hasattr(self.tree, 'items'):
             for k, v in sorted(self.tree.items()):
                 if v is None:
@@ -94,48 +105,39 @@ class Stmt:
                 if isinstance(v, Stmt):
                     s += v.dump(indent=indent+1)
                 elif isinstance(v, list):
-                    if not v:
-                        s += '[]\n'
-                    else:
-                        s += '[\n'
-                        if all(isinstance(x, Stmt) for x in v):
-                            for x in sorted(v, key=repr):
-                                s += indentstr + '  ' + x.dump(indent=indent+1)
-                        else:
-                            for x in v:
-                                if isinstance(x, Stmt):
-                                    s += indentstr + '  ' + x.dump(indent=indent+1)
-                                else:
-                                    s += indentstr + '  ' + repr(x) + '\n'
-                        s += indentstr + ']\n'
+                    s += self.dumplist(v, indent=indent)
                 elif isinstance(v, dict):
                     s += '\n'
                     for k1, v1 in sorted(v.items()):
-                        s += '{}{}: '.format(indentstr, k1)
+                        s += indentstr + k1 + ': '
                         if isinstance(v1, Stmt):
                             s += v1.dump(indent=indent+1)
                         else:
                             s += repr(v1) + '\n'
                 else:
                     s += repr(v) + '\n'
-        else:
-            if not self.tree:
-                s += indentstr + '[]\n'
-            else:
-                s += indentstr + '[\n'
-                for x in self.tree:
-                    if isinstance(x, Stmt):
-                        s += indentstr + '  ' + x.dump(indent=indent+1)
-                    else:
-                        s += indentstr + '  ' + repr(x) + '\n'
-                s += indentstr + ']\n'
+        elif isinstance(self.tree, list):
+            s += indentstr + self.dumplist(self.tree, indent=indent)
         return s
 
-    def filter_tree(self):
-        if isinstance(self.tree, dict):
-            return {k: v for k, v in self.tree.items() if v is not None}
-        else:
-            return self.tree
+    @staticmethod
+    def tree_filter(t, func):
+        match = []
+        if isinstance(t, dict):
+            for k, v in t.items():
+                if func(v):
+                    match.append(v)
+                elif isinstance(v, (dict, list, tuple)):
+                    match.extend(Stmt.tree_filter(v, func))
+        elif isinstance(t, list):
+            for v in t:
+                if func(v):
+                    match.append(v)
+                elif isinstance(v, (dict, list, tuple)):
+                    match.extend(Stmt.tree_filter(v, func))
+        return match
+            
+
 
 
 class AConst(Stmt): pass
@@ -145,7 +147,6 @@ class AStar(Stmt): pass
 class ColumnRef(Stmt): pass
 class CommonTableExpr(Stmt): pass
 class Copy(Stmt): pass
-class CreateMaterializedView(Stmt): pass
 class CreateTable(Stmt): pass
 
 class CreateTableAs(Stmt):
@@ -155,24 +156,26 @@ class CreateTableAs(Stmt):
     def maybe_src_dest(self):
         return True
     def get_src(self):
-        if self.query.withClause:
-            return sorted(set(repr(r) for r in
-                        flatten(c.ctequery.fromClause.enumerate_tables()
-                            for c in self.query.withClause.ctes)))
-        return None
+        return TableNames.norm(c.ctequery.fromClause.enumerate_tables()
+                        for c in self.query.withClause.ctes)
     def get_dest(self):
         return [self.into.rel.relname]
 
 class CreateView(Stmt):
     def maybe_src_dest(self):
         return True
+    def get_src(self):
+        return self.query.enumerate_from()
+    def get_dest(self):
+        return [repr(TableName.fromRangeVar(self.view))]
 
 class FromClause(Stmt):
-    def __iter__(self):
-        return iter(self.tree)
     def enumerate_tables(self):
         if isinstance(self.tree, list):
-            return flatten(fc.enumerate_from() for fc in self.tree)
+            return TableNames.norm(
+                fc.enumerate_from()
+                    for fc in Stmt.tree_filter(self.tree,
+                        lambda x: hasattr(x, 'enumerate_from')))
         return []
 
 class FromClauseSubquery(Stmt): pass
@@ -181,11 +184,9 @@ class InsertInto(Stmt):
     def maybe_src_dest(self):
         return True
     def get_src(self):
+        #print('ii2', self.selectStmt, 'ii1', self)
         if self.selectStmt:
-            return [r.relname
-                        for r in self.selectStmt.fromClause
-                            if r.relpersistence == 'p']
-        return None
+            return TableNames.norm(self.selectStmt.enumerate_from())
     def get_dest(self):
         return [self.relation.relname]
 
@@ -194,35 +195,33 @@ class NullTest(Stmt): pass
 
 class RangeVar(Stmt):
     def enumerate_from(self):
-        return TableName(self.relname, schema=self.schemaname)
+        return TableName.fromRangeVar(self)
 
 class RangeSubselect(Stmt):
     def enumerate_from(self):
-        if self.subquery:
-            return self.subquery.enumerate_from()
-        return []
+        return self.subquery.enumerate_from()
 
 class RefreshMatView(Stmt):
     def maybe_src_dest(self):
         return True
     def get_src(self):
-        # src and dest and defined by the matview itself, not the refresh query...
-        # to implement this we need to understand the shape of the matview
-        raise NotImplementedError
+        # FIXME: src and dest and defined by the matview itself, not the refresh
+        # query... to implement this we need to understand the shape of the matview
+        return []
     def get_dest(self):
-        raise NotImplementedError
+        return [repr(TableName.fromRangeVar(self.relation))]
 
 class ResTarget(Stmt): pass
 
 class Select(Stmt):
     def enumerate_from(self):
-        return self.fromClause.enumerate_tables()
+        return sorted(set(self.fromClause.enumerate_tables() +
+                          self.valuesLists.enumerate_tables()))
+        
 
 class Subquery(Stmt):
     def enumerate_from(self):
-        if 'SELECT' in self.tree:
-            return self.tree['SELECT'].enumerate_from()
-        return []
+        return self.tree['SELECT'].enumerate_from()
 
 class UnknownStmt(Stmt): pass
 
@@ -230,13 +229,24 @@ class Update(Stmt):
     def maybe_src_dest(self):
         return True
     def get_src(self):
-        if self.fromClause:
-            return [repr(t)
-                        for t in self.fromClause.enumerate_tables()] or None
-        return None
+        return self.fromClause.enumerate_tables()
     def get_dest(self):
         x = self.relation.relname if self.relation.relpersistence == 'p' else None
-        return [x] if x else None
+        return [x] if x else []
+
+class ValuesLists(Stmt):
+    def enumerate_tables(self):
+        if self.tree:
+            #print('valueslist flttened', flatten1(self.tree))
+            tbls = [(v.fromClause.enumerate_from()
+                        if hasattr(v, 'fromClause')
+                        else v['subselect'].enumerate_from()
+                        if isinstance(v, dict) and 'subselect' in v
+                        else None)
+                        for v in flatten1(self.tree)]
+            return flatten1([t for t in tbls if t])
+        return []
+
 
 class WithClause(Stmt): pass
 
@@ -252,7 +262,6 @@ Stmt.kwclass = {
     'COPY': Copy,
     'COLUMNREF': ColumnRef,
     'COMMONTABLEEXPR': CommonTableExpr,
-    'CREATE MATERIALIZED VIEW': CreateMaterializedView,
     'CREATESTMT': CreateTable,
     'CREATE TABLE AS': CreateTableAs,
     'fromClause': FromClause,
@@ -268,19 +277,30 @@ Stmt.kwclass = {
     'UPDATE': Update,
     'VIEWSTMT': CreateView,
     'WITHCLAUSE': WithClause,
+    'valuesLists': ValuesLists,
 }
 
 
 class TableName(object):
+
     def __init__(self, name, schema=None):
         self.name = name
         self.schema = schema
         self.fqname = (schema + '.' if schema else '') + name
         self.normname = (schema + '.'
                             if schema and schema != 'public' else '') + name
+
     def __repr__(self):
         return self.normname
-    def __eq__(self, other):
-        return self.normname == other.normname
-    def __lt__(self, other):
-        return self.normname < other.normname
+
+    @staticmethod
+    def fromRangeVar(rv):
+        return TableName(rv.relname, schema=rv.schemaname)
+
+
+class TableNames:
+
+    @staticmethod
+    def norm(l):
+        flat = [x for x in flatten(l) if x is not None]
+        return sorted(set(repr(r) if isinstance(r, TableName) else r for r in flat))

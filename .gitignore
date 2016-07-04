@@ -1,5 +1,7 @@
 *.pyc
 .*.sw[op]
 **/__pycache__
+.coverage
+cover/
 vendor/
 venv/
