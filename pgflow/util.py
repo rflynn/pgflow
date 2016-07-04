@@ -19,7 +19,6 @@ def flatten(l):
 def flatten_(container):
     for i in container:
         if isinstance(i, Iterable) and not isinstance(i, str):
-            for j in flatten(i):
-                yield j
+            yield from flatten(i)
         else:
             yield i

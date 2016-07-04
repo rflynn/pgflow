@@ -84,11 +84,11 @@ class Stmt:
         indentstr = indents * indent
         s = '[\n'
         if all(isinstance(x, Stmt) for x in v):
-            for x in sorted(v, key=repr):
-                s += indentstr + indents + x.dump(indent=indent+1)
+            s += ''.join(indentstr + indents + x.dump(indent=indent+1)
+                            for x in sorted(v))
         else:
-            for x in v:
-                s += indentstr + indents + repr(x) + '\n'
+            s += ''.join(indentstr + indents + repr(x) + '\n'
+                            for x in v)
         s += indentstr + ']\n'
         return s
 
@@ -101,7 +101,7 @@ class Stmt:
             for k, v in sorted(self.tree.items()):
                 if v is None:
                     continue
-                s += '{}{}: '.format(indentstr, k)
+                s += indentstr + k + ': '
                 if isinstance(v, Stmt):
                     s += v.dump(indent=indent+1)
                 elif isinstance(v, list):
@@ -122,6 +122,9 @@ class Stmt:
 
     @staticmethod
     def tree_filter(t, func):
+        '''
+        recursively search tree for nodes x that func(x)
+        '''
         match = []
         if isinstance(t, dict):
             for k, v in t.items():
@@ -145,7 +148,9 @@ class Alias(Stmt): pass
 class AExprIn(Stmt): pass
 class AStar(Stmt): pass
 class ColumnRef(Stmt): pass
-class CommonTableExpr(Stmt): pass
+class CommonTableExpr(Stmt):
+    def __lt__(self, other):
+        return self.tree.items() < other.tree.items()
 class Copy(Stmt): pass
 class CreateTable(Stmt): pass
 
@@ -211,7 +216,9 @@ class RefreshMatView(Stmt):
     def get_dest(self):
         return [repr(TableName.fromRangeVar(self.relation))]
 
-class ResTarget(Stmt): pass
+class ResTarget(Stmt):
+    def __lt__(self, other):
+        return self.tree.items() < other.tree.items()
 
 class Select(Stmt):
     def enumerate_from(self):

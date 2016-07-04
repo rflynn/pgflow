@@ -108,25 +108,6 @@ Select:
   op: 0
   targetList: [
     ResTarget:
-      location: 19
-      val: 
-      location: 19
-      operName: None
-      subLinkType: 4
-      subselect: Select:
-          all: False
-          fromClause: FromClause:
-          op: 0
-          targetList: [
-            ResTarget:
-              location: 27
-              val: AConst:
-                  location: 27
-                  val: 2
-          ]
-          valuesLists: ValuesLists:
-      testexpr: None
-    ResTarget:
       location: 7
       val: 
       location: 7
@@ -145,6 +126,25 @@ Select:
           ]
           valuesLists: ValuesLists:
       testexpr: None
+    ResTarget:
+      location: 19
+      val: 
+      location: 19
+      operName: None
+      subLinkType: 4
+      subselect: Select:
+          all: False
+          fromClause: FromClause:
+          op: 0
+          targetList: [
+            ResTarget:
+              location: 27
+              val: AConst:
+                  location: 27
+                  val: 2
+          ]
+          valuesLists: ValuesLists:
+      testexpr: None
   ]
   valuesLists: ValuesLists:
 """)
@@ -155,7 +155,7 @@ Select:
     def test_insert_into_values_raw(self):
         tree = sql2json('insert into t1 values (1)')
         s = Stmt.from_tree(tree[0])
-        print(s)
+        # print(s)
         self.assertEqual(s.maybe_src_dest(), True)
         self.assertEqual(s.get_src(), [])
         self.assertEqual(s.get_dest(), ['t1'])
@@ -163,7 +163,7 @@ Select:
     def test_insert_into_values_subselect(self):
         tree = sql2json('insert into t1 values ((select 1 from t2))')
         s = Stmt.from_tree(tree[0])
-        print(s)
+        # print(s)
         self.assertEqual(s.maybe_src_dest(), True)
         self.assertEqual(s.get_src(), ['t2'])
         self.assertEqual(s.get_dest(), ['t1'])
@@ -208,7 +208,7 @@ InsertInto:
     def test_create_view_1(self):
         tree = sql2json('create view v1 as select x, y, z from t1 join t2 using (foo_id) left join t3 using (bar_id)')
         s = Stmt.from_tree(tree[0])
-        print(s)
+        # print(s)
         self.assertEqual(s.maybe_src_dest(), True)
         self.assertEqual(s.get_src(), ['t1', 't2', 't3'])
         self.assertEqual(s.get_dest(), ['v1'])
@@ -374,7 +374,7 @@ CreateTableAs:
         sql = 'refresh materialized view v1;'
         tree = sql2json(sql)
         s = Stmt.from_tree(tree[0])
-        print(s)
+        # print(s)
         self.assertEqual(s.maybe_src_dest(), True)
         self.assertEqual(s.get_src(), [])
         self.assertEqual(s.get_dest(), ['v1'])
