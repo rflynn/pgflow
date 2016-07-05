@@ -106,41 +106,11 @@ class Stmt:
                     s += v.dump(indent=indent+1)
                 elif isinstance(v, list):
                     s += self.dumplist(v, indent=indent)
-                elif isinstance(v, dict):
-                    s += '\n'
-                    for k1, v1 in sorted(v.items()):
-                        s += indentstr + k1 + ': '
-                        if isinstance(v1, Stmt):
-                            s += v1.dump(indent=indent+1)
-                        else:
-                            s += repr(v1) + '\n'
                 else:
                     s += repr(v) + '\n'
         elif isinstance(self.tree, list):
             s += indentstr + self.dumplist(self.tree, indent=indent)
         return s
-
-    @staticmethod
-    def tree_filter(t, func):
-        '''
-        recursively search tree for nodes x that func(x)
-        '''
-        match = []
-        if isinstance(t, dict):
-            for k, v in t.items():
-                if func(v):
-                    match.append(v)
-                elif isinstance(v, (dict, list, tuple)):
-                    match.extend(Stmt.tree_filter(v, func))
-        elif isinstance(t, list):
-            for v in t:
-                if func(v):
-                    match.append(v)
-                elif isinstance(v, (dict, list, tuple)):
-                    match.extend(Stmt.tree_filter(v, func))
-        return match
-            
-
 
 
 class AConst(Stmt): pass
@@ -186,10 +156,8 @@ class CreateView(Stmt):
 class FromClause(Stmt):
     def enumerate_tables(self):
         if isinstance(self.tree, list):
-            return RelNames.norm(
-                fc.enumerate_from()
-                    for fc in Stmt.tree_filter(self.tree,
-                        lambda x: hasattr(x, 'enumerate_from')))
+            return RelNames.norm(t.enumerate_from()
+                                    for t in flatten(self.tree))
         return []
 
 class FromClauseSubquery(Stmt): pass
@@ -237,9 +205,10 @@ class Select(Stmt):
     def enumerate_from(self):
         return sorted(set(self.fromClause.enumerate_tables() +
                           self.valuesLists.enumerate_tables()))
-        
+
 
 class Sublink(Stmt): pass
+
 class Subquery(Stmt):
     def enumerate_from(self):
         return self.tree['SELECT'].enumerate_from()

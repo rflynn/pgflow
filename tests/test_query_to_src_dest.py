@@ -215,7 +215,7 @@ InsertInto:
         sql = 'create materialized view matview as with a as (select t1."id" id_alias from table1 t1), b as (select 2) select * from a union all select * from b;'
         tree = sql2json(sql)
         s = Stmt.from_tree(tree[0])
-        #print(s)
+        # print(s)
         self.assertEqual(repr(s), """\
 CreateTableAs:
   into: IntoClause:
@@ -380,9 +380,9 @@ CreateTableAs:
     def test_unhandled_lock(self):
         sql = 'lock table foo;'
         tree = sql2json(sql)
-        print(tree)
+        # print(tree)
         s = Stmt.from_tree(tree[0])
-        print(s)
+        # print(s)
         self.assertEqual(UnhandledStmt, type(s))
         self.assertEqual(s.maybe_src_dest(), False)
         self.assertEqual(s.get_src(), [])
@@ -391,9 +391,9 @@ CreateTableAs:
     def test_copy_table_from_file(self):
         sql = "COPY country FROM '/path/to/foo.csv';"
         tree = sql2json(sql)
-        print(tree)
+        # print(tree)
         s = Stmt.from_tree(tree[0])
-        print(s)
+        # print(s)
         self.assertEqual(s.maybe_src_dest(), True)
         self.assertEqual(s.get_src(), ['/path/to/foo.csv'])
         self.assertEqual(s.get_dest(), ['country'])
