@@ -6,6 +6,8 @@ set -o pipefail
 
 which python3
 
+NCPU=$(sysctl -n hw.ncpu || grep -c ^processor /proc/cpuinfo || echo 1)
+
 if ! [ -d venv ]
 then
     virtualenv -p python3 venv 2>/dev/null || python3 -m venv venv
@@ -26,7 +28,7 @@ then
     if ! test -d ./src/backend/postgres
     then
         ./configure
-        make -j 2
+        make -j $NCPU
     fi
     cd ..
     echo Build Queryparser binary
