@@ -4,11 +4,6 @@ set -x
 set -e
 set -o pipefail
 
-if ! which jq
-then
-    brew install jq
-fi
-
 which python3
 
 if ! [ -d venv ]
@@ -31,7 +26,7 @@ then
     if ! test -d ./src/backend/postgres
     then
         ./configure
-        make
+        make -j 2
     fi
     cd ..
     echo Build Queryparser binary

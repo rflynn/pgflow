@@ -12,7 +12,7 @@ def sql2json(sqlstr):
     # modify queryparser to stay open and process multiple commands so we
     # can keep the pipe open...
     # or better yet build a proper python c module over it
-    p = Popen(['/Users/ryanflynn/src/pgflow/vendor/queryparser/queryparser',
+    p = Popen(['./vendor/queryparser/queryparser',
                '--json'],
               stdin=PIPE, stderr=PIPE, stdout=PIPE)
     try:
