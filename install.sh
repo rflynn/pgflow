@@ -6,7 +6,7 @@ set -o pipefail
 
 which python3
 
-NCPU=$(sysctl -n hw.ncpu || grep -c ^processor /proc/cpuinfo || echo 1)
+NCPU=$(sysctl -n hw.ncpu || nproc || grep -c ^processor /proc/cpuinfo || echo 1)
 
 if ! [ -d venv ]
 then
@@ -23,7 +23,9 @@ if ! test -f queryparser
 then
     echo Build PostgreSQL...
     # NOTE: happened to get e18ecb8dd973a169062b1a528aa1fbc160b2e3eb
-    test -d postgresql || git clone --depth 1 https://github.com/pganalyze/postgres.git postgresql
+    echo "need custom branch to support flex-2.6.0..."
+    # test -d postgresql || git clone --depth 1 https://github.com/pganalyze/postgres.git postgresql
+    test -d postgresql || git clone --depth 1 git@github.com:rflynn/postgres.git postgresql --branch handle-flex-2.6.0
     cd postgresql
     if ! test -d ./src/backend/postgres
     then

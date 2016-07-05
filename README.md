@@ -2,16 +2,15 @@
 # Run Me
 
 ```sh
-/bin/bash install.sh # takes a while...
-venv/bin/nosetests
+make install test
 ```
 
 # Summary
 
 This project visualizes flow of data through a PostgreSQL database in real-time.
 
+queries -------+---> query log -> qlogmon -> app -> vis
 existing DDL --+
-queries -------'---> query log -> qlogmon -> app -> vis
 
 
 # Implementation Plan

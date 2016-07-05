@@ -8,4 +8,4 @@ install: vendor
 vendor:
 	/bin/bash install.sh
 
-.PHONY: vendor
+.PHONY: test install vendor
