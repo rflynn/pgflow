@@ -2,7 +2,7 @@
 import unittest
 from nose.tools import eq_, assert_raises
 
-from pgflow import Stmt, sql2json
+from pgflow import Stmt, sql2json, UnhandledStmt
 
 
 
@@ -50,7 +50,7 @@ Update:
     def test_update_select_1(self):
         tree = sql2json("""UPDATE address SET cid = customers.id FROM customers WHERE customers.id = address.id""")
         s = Stmt.from_tree(tree[0])
-        #print(s)
+        # print(s)
         self.assertEqual(repr(s), """\
 Update:
   fromClause: FromClause:
@@ -77,21 +77,23 @@ Update:
           ]
           location: 25
   ]
-  whereClause: 
-  lexpr: ColumnRef:
-      fields: [
-        'customers'
-        'id'
+  whereClause: AExpr:
+      lexpr: ColumnRef:
+          fields: [
+            'customers'
+            'id'
+          ]
+          location: 59
+      location: 72
+      name: [
+        '='
       ]
-      location: 59
-  location: 72
-  name: ['=']
-  rexpr: ColumnRef:
-      fields: [
-        'address'
-        'id'
-      ]
-      location: 74
+      rexpr: ColumnRef:
+          fields: [
+            'address'
+            'id'
+          ]
+          location: 74
 """)
         self.assertEqual(s.maybe_src_dest(), True)
         self.assertEqual(s.get_src(), ['customers'])
@@ -100,7 +102,7 @@ Update:
     def test_select_select_1_select_2(self):
         tree = sql2json('select (select 1), (select 2);')
         s = Stmt.from_tree(tree[0])
-        #print(s)
+        # print(s)
         self.assertEqual(repr(s), """\
 Select:
   all: False
@@ -109,42 +111,38 @@ Select:
   targetList: [
     ResTarget:
       location: 7
-      val: 
-      location: 7
-      operName: None
-      subLinkType: 4
-      subselect: Select:
-          all: False
-          fromClause: FromClause:
-          op: 0
-          targetList: [
-            ResTarget:
-              location: 15
-              val: AConst:
+      val: Sublink:
+          location: 7
+          subLinkType: 4
+          subselect: Select:
+              all: False
+              fromClause: FromClause:
+              op: 0
+              targetList: [
+                ResTarget:
                   location: 15
-                  val: 1
-          ]
-          valuesLists: ValuesLists:
-      testexpr: None
+                  val: AConst:
+                      location: 15
+                      val: 1
+              ]
+              valuesLists: ValuesLists:
     ResTarget:
       location: 19
-      val: 
-      location: 19
-      operName: None
-      subLinkType: 4
-      subselect: Select:
-          all: False
-          fromClause: FromClause:
-          op: 0
-          targetList: [
-            ResTarget:
-              location: 27
-              val: AConst:
+      val: Sublink:
+          location: 19
+          subLinkType: 4
+          subselect: Select:
+              all: False
+              fromClause: FromClause:
+              op: 0
+              targetList: [
+                ResTarget:
                   location: 27
-                  val: 2
-          ]
-          valuesLists: ValuesLists:
-      testexpr: None
+                  val: AConst:
+                      location: 27
+                      val: 2
+              ]
+              valuesLists: ValuesLists:
   ]
   valuesLists: ValuesLists:
 """)
@@ -378,6 +376,27 @@ CreateTableAs:
         self.assertEqual(s.maybe_src_dest(), True)
         self.assertEqual(s.get_src(), [])
         self.assertEqual(s.get_dest(), ['v1'])
+
+    def test_unhandled_lock(self):
+        sql = 'lock table foo;'
+        tree = sql2json(sql)
+        print(tree)
+        s = Stmt.from_tree(tree[0])
+        print(s)
+        self.assertEqual(UnhandledStmt, type(s))
+        self.assertEqual(s.maybe_src_dest(), False)
+        self.assertEqual(s.get_src(), [])
+        self.assertEqual(s.get_dest(), [])
+
+    def test_copy_table_from_file(self):
+        sql = "COPY country FROM '/path/to/foo.csv';"
+        tree = sql2json(sql)
+        print(tree)
+        s = Stmt.from_tree(tree[0])
+        print(s)
+        self.assertEqual(s.maybe_src_dest(), True)
+        self.assertEqual(s.get_src(), ['/path/to/foo.csv'])
+        self.assertEqual(s.get_dest(), ['country'])
 
 
 class TestQuery2Json(unittest.TestCase):

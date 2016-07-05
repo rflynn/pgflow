@@ -5,7 +5,6 @@ from .util import flatten, flatten1
 def sql2json(sqlstr):
 
     import json
-    import shlex
     from subprocess import Popen, PIPE
 
     # NOTE: queryparser is the thinnest of commandline wrappers;
@@ -13,7 +12,8 @@ def sql2json(sqlstr):
     # modify queryparser to stay open and process multiple commands so we
     # can keep the pipe open...
     # or better yet build a proper python c module over it
-    p = Popen(['/Users/ryanflynn/src/pgflow/vendor/queryparser/queryparser', '--json'],
+    p = Popen(['/Users/ryanflynn/src/pgflow/vendor/queryparser/queryparser',
+               '--json'],
               stdin=PIPE, stderr=PIPE, stdout=PIPE)
     try:
         outs, errs = p.communicate((sqlstr + '\n').encode('utf8'))
@@ -24,8 +24,6 @@ def sql2json(sqlstr):
 
 
 class Stmt:
-
-    tree = None
 
     def __init__(self, tree):
         if isinstance(tree, dict):
@@ -61,6 +59,8 @@ class Stmt:
         c = Stmt.kwclass.get(k)
         if c:
             return c(v)
+        elif k == k.upper() and isinstance(v, dict):
+            return UnhandledStmt(k, v)
         elif isinstance(v, list):
             return [Stmt.from_tree(t) for t in v]
         elif isinstance(v, dict):
@@ -145,13 +145,22 @@ class Stmt:
 
 class AConst(Stmt): pass
 class Alias(Stmt): pass
+class AExpr(Stmt): pass
 class AExprIn(Stmt): pass
 class AStar(Stmt): pass
 class ColumnRef(Stmt): pass
 class CommonTableExpr(Stmt):
     def __lt__(self, other):
         return self.tree.items() < other.tree.items()
-class Copy(Stmt): pass
+
+class Copy(Stmt):
+    def maybe_src_dest(self):
+        return True
+    def get_src(self):
+        return [self.filename]
+    def get_dest(self):
+        return [self.relation.relname]
+
 class CreateTable(Stmt): pass
 
 class CreateTableAs(Stmt):
@@ -161,7 +170,7 @@ class CreateTableAs(Stmt):
     def maybe_src_dest(self):
         return True
     def get_src(self):
-        return TableNames.norm(c.ctequery.fromClause.enumerate_tables()
+        return RelNames.norm(c.ctequery.fromClause.enumerate_tables()
                         for c in self.query.withClause.ctes)
     def get_dest(self):
         return [self.into.rel.relname]
@@ -172,12 +181,12 @@ class CreateView(Stmt):
     def get_src(self):
         return self.query.enumerate_from()
     def get_dest(self):
-        return [repr(TableName.fromRangeVar(self.view))]
+        return [repr(RelName.fromRangeVar(self.view))]
 
 class FromClause(Stmt):
     def enumerate_tables(self):
         if isinstance(self.tree, list):
-            return TableNames.norm(
+            return RelNames.norm(
                 fc.enumerate_from()
                     for fc in Stmt.tree_filter(self.tree,
                         lambda x: hasattr(x, 'enumerate_from')))
@@ -191,16 +200,20 @@ class InsertInto(Stmt):
     def get_src(self):
         #print('ii2', self.selectStmt, 'ii1', self)
         if self.selectStmt:
-            return TableNames.norm(self.selectStmt.enumerate_from())
+            return RelNames.norm(self.selectStmt.enumerate_from())
     def get_dest(self):
         return [self.relation.relname]
 
 class IntoClause(Stmt): pass
+class JoinExpr(Stmt):
+    def enumerate_from(self):
+        return [self.larg.enumerate_from()] + [self.rarg.enumerate_from()]
+
 class NullTest(Stmt): pass
 
 class RangeVar(Stmt):
     def enumerate_from(self):
-        return TableName.fromRangeVar(self)
+        return RelName.fromRangeVar(self)
 
 class RangeSubselect(Stmt):
     def enumerate_from(self):
@@ -214,7 +227,7 @@ class RefreshMatView(Stmt):
         # query... to implement this we need to understand the shape of the matview
         return []
     def get_dest(self):
-        return [repr(TableName.fromRangeVar(self.relation))]
+        return [repr(RelName.fromRangeVar(self.relation))]
 
 class ResTarget(Stmt):
     def __lt__(self, other):
@@ -226,11 +239,15 @@ class Select(Stmt):
                           self.valuesLists.enumerate_tables()))
         
 
+class Sublink(Stmt): pass
 class Subquery(Stmt):
     def enumerate_from(self):
         return self.tree['SELECT'].enumerate_from()
 
-class UnknownStmt(Stmt): pass
+class UnhandledStmt(Stmt):
+    def __init__(self, k, v):
+        super().__init__(v)
+        self.command = k
 
 class Update(Stmt):
     def maybe_src_dest(self):
@@ -247,8 +264,8 @@ class ValuesLists(Stmt):
             #print('valueslist flttened', flatten1(self.tree))
             tbls = [(v.fromClause.enumerate_from()
                         if hasattr(v, 'fromClause')
-                        else v['subselect'].enumerate_from()
-                        if isinstance(v, dict) and 'subselect' in v
+                        else v.subselect.enumerate_from()
+                        if hasattr(v, 'subselect')
                         else None)
                         for v in flatten1(self.tree)]
             return flatten1([t for t in tbls if t])
@@ -262,33 +279,36 @@ class WithClause(Stmt): pass
 # build mapping within Stmt so it can use them
 Stmt.kwclass = {
     # ref: https://www.postgresql.org/docs/9.5/static/sql-commands.html
+    'AEXPR IN': AExprIn,
+    'AEXPR': AExpr,
+    'ALIAS': Alias,
     'A_CONST': AConst,
     'A_STAR': AStar,
-    'ALIAS': Alias,
-    'AEXPR IN': AExprIn,
-    'COPY': Copy,
     'COLUMNREF': ColumnRef,
     'COMMONTABLEEXPR': CommonTableExpr,
-    'CREATESTMT': CreateTable,
+    'COPY': Copy,
     'CREATE TABLE AS': CreateTableAs,
-    'fromClause': FromClause,
+    'CREATESTMT': CreateTable,
     'INSERT INTO': InsertInto,
     'INTOCLAUSE': IntoClause,
+    'JOINEXPR': JoinExpr,
     'NULLTEST': NullTest,
-    'RANGEVAR': RangeVar,
     'RANGESUBSELECT': RangeSubselect,
+    'RANGEVAR': RangeVar,
     'REFRESHMATVIEWSTMT': RefreshMatView,
     'RESTARGET': ResTarget,
     'SELECT': Select,
-    'subquery': Subquery,
+    'SUBLINK': Sublink,
     'UPDATE': Update,
     'VIEWSTMT': CreateView,
     'WITHCLAUSE': WithClause,
+    'fromClause': FromClause,
+    'subquery': Subquery,
     'valuesLists': ValuesLists,
 }
 
 
-class TableName(object):
+class RelName:
 
     def __init__(self, name, schema=None):
         self.name = name
@@ -302,12 +322,20 @@ class TableName(object):
 
     @staticmethod
     def fromRangeVar(rv):
-        return TableName(rv.relname, schema=rv.schemaname)
+        return RelName(rv.relname, schema=rv.schemaname)
+
+    @staticmethod
+    def fromNorm(name):
+        if '.' in name:
+            schema, name = name.split('.')
+        else:
+            schema = 'public'
+        return RelName(name, schema=schema)
 
 
-class TableNames:
+class RelNames:
 
     @staticmethod
     def norm(l):
         flat = [x for x in flatten(l) if x is not None]
-        return sorted(set(repr(r) if isinstance(r, TableName) else r for r in flat))
+        return sorted(set(repr(r) if isinstance(r, RelName) else r for r in flat))

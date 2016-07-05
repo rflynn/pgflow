@@ -19,7 +19,7 @@ queries -------'---> query log -> qlogmon -> app -> vis
 1. confidently parse postgresql-flavored sql
 2. parse DDL such as Views and Matviews to understand source/destinations
 3. parse arbitrary queries, sift out applicable ones
-4. condense queries to a queryx (timespan, [(source, dest, quantity)])
+4. condense queries to a querysrcdest (timespan, [src], [dest])
 5. stream queryx over websocket
 6. visualize results
 6. document procedures for...
