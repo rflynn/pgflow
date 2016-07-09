@@ -1,8 +1,9 @@
 *.pyc
 .*.sw[op]
+*.o
 **/__pycache__
 .coverage
 cover/
-vendor/
+dep/
 venv/
 queryparser/queryparser

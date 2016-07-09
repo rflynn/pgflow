@@ -9,7 +9,6 @@
 
 
 struct pypgsql {
-    wchar_t *query;
     char *in;
     PgQueryParseResult out;
 };

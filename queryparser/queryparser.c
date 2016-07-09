@@ -43,28 +43,27 @@ void pypgsql_init(struct pypgsql *p)
 
 void pypgsql_destroy(struct pypgsql *p)
 {
-    free(p->query);
-    p->query = NULL;
     free(p->in);
     p->in = NULL;
     memset(&p->out, 0, sizeof p->out);
 }
 
-static wchar_t * readinput(FILE *f)
+static char * readinput(FILE *f)
 {
-    wchar_t buf[BUFSIZ];
-    wchar_t *input = NULL;
+    char buf[BUFSIZ];
+    char *input = NULL;
     size_t inlen = 0;
-    while (fgetws(buf, sizeof buf, f)) {
+    while (fgets(buf, sizeof buf, f)) {
         size_t tmplen;
-        wchar_t *tmp;
-        tmplen = inlen + wcslen(buf) + 1;
-        tmp = realloc(input, tmplen * sizeof *tmp);
+        char *tmp;
+        tmplen = inlen + strlen(buf);
+        tmp = realloc(input, (tmplen + 1) * sizeof *tmp);
         if (!tmp) {
             break;
         }
         input = tmp;
-        wcscat(input, buf);
+        inlen = tmplen;
+        strcat(input, buf);
     }
     return input;
 }
@@ -72,23 +71,19 @@ static wchar_t * readinput(FILE *f)
 int main(void)
 {
     struct pypgsql p;
-    size_t maxbytes;
 
     pypgsql_init(&p);
 
-    p.query = readinput(stdin);
+    p.in = readinput(stdin);
 
-    /* convert input string and parse */
-    maxbytes = (wcslen(p.query) + 1) * 4;
-    p.in = malloc(maxbytes);
-    assert(p.in);
-    wcstombs(p.in, p.query, maxbytes);
-    p.out = pg_query_parse(p.in);
+    if (p.in) {
+        p.out = pg_query_parse(p.in);
 
-    //printf("%s\n", p.out.parse_tree);
-    fputs(p.out.parse_tree, stdout);
+        fputs(p.out.parse_tree, stdout);
+        fputc('\n', stdout);
 
-    pypgsql_destroy(&p);
+        pypgsql_destroy(&p);
+    }
 
     return 0;
 }

@@ -1,15 +1,12 @@
 # vim: set ts=8 noet:
 
-test:
+test: install
 	venv/bin/nosetests --with-coverage --cover-erase --cover-html
 
-install: vendor
+install: dep queryparser
 
-vendor:
+dep: install.sh Makefile
 	/bin/bash install.sh
-
-example: example.c vendor/libpg_query/libpg_query.a
-	cc -Ivendor/libpg_query -Lvendor/libpg_query -lpg_query -o example example.c
 
 queryparser:
 	$(MAKE) -C queryparser
@@ -17,4 +14,4 @@ queryparser:
 clean:
 	$(MAKE) -C queryparser clean
 
-.PHONY: test install vendor queryparser clean
+.PHONY: test install dep queryparser clean
