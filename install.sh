@@ -11,7 +11,8 @@ echo setup virtualenv...
 venv/bin/pip3 install -r requirements.txt
 
 echo build libpg_query...
-mkdir -p vendor && cd vendor
+mkdir -p dep && cd dep
 [ -d libpg_query ] || git clone https://github.com/lfittl/libpg_query.git
 cd libpg_query/
+git pull
 make -j $NCPU

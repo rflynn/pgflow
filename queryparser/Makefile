@@ -1,11 +1,18 @@
 # vim: set ts=8 noet:
 
-PATH_LIBPG_QUERY := ../vendor/libpg_query
-CFLAGS := -W -Wall -Werror -pedantic -Os
-LDFLAGS := -I$(PATH_LIBPG_QUERY) -L$(PATH_LIBPG_QUERY) -lpg_query
+PATH_LIBPG_QUERY := ../dep/libpg_query
+INCLUDES_LIBPG_QUERY := -I $(PATH_LIBPG_QUERY) -I $(PATH_LIBPG_QUERY)/src -I $(PATH_LIBPG_QUERY)/src/postgres/include
+CFLAGS := -W -Wall -pedantic -Os -fpic $(INCLUDES_LIBPG_QUERY)
 
-queryparser: queryparser.c $(PATH_LIBPG_QUERY)/libpg_query.a
-	cc $(CFLAGS) $(LDFLAGS) -o queryparser queryparser.c
+CC ?= cc
+
+queryparser: queryparser.o
+	$(CC) -o $@ $(CFLAGS) -g queryparser.c ../dep/libpg_query/libpg_query.a
+
+queryparser2: queryparser.o $(PATH_LIBPG_QUERY)/libpg_query.a
+	$(LD) $(LDFLAGS) -o $@ queryparser.o $(PATH_LIBPG_QUERY)/libpg_query.a
+
+queryparser.o: queryparser.c
 
 clean:
 	$(RM) *.o queryparser
