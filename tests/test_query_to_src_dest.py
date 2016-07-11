@@ -50,7 +50,7 @@ Update:
     def test_update_select_1(self):
         tree = sql2json("""UPDATE address SET cid = customers.id FROM customers WHERE customers.id = address.id""")
         s = Stmt.from_tree(tree[0])
-        print(s)
+        # print(s)
         self.assertEqual(repr(s), """\
 Update:
   fromClause: FromClause:
@@ -110,7 +110,7 @@ Update:
     def test_select_select_1_select_2(self):
         tree = sql2json('select (select 1), (select 2);')
         s = Stmt.from_tree(tree[0])
-        print(s)
+        # print(s)
         self.assertEqual(repr(s), """\
 Select:
   op: 0
@@ -214,7 +214,7 @@ InsertStmt:
         sql = 'create materialized view matview as with a as (select t1."id" id_alias from table1 t1), b as (select 2) select * from a union all select * from b;'
         tree = sql2json(sql)
         s = Stmt.from_tree(tree[0])
-        print(s)
+        # print(s)
         self.assertEqual(repr(s), """\
 CreateTableAs:
   into: IntoClause:
@@ -377,7 +377,7 @@ CreateTableAs:
         tree = sql2json(sql)
         # print(tree)
         s = Stmt.from_tree(tree[0])
-        print(s)
+        # print(s)
         self.assertEqual(s.maybe_src_dest(), True)
         self.assertEqual(s.get_src(), ['/path/to/foo.csv'])
         self.assertEqual(s.get_dest(), ['country'])
@@ -388,7 +388,7 @@ class TestQuery2Json(unittest.TestCase):
     maxDiff = None
 
     def test_select_1(self):
-        print(sql2json('select 1'))
+        # print(sql2json('select 1'))
         self.assertEqual(sql2json('select 1'),
                          [{'SelectStmt': {'targetList': [{'ResTarget': {'val': {'A_Const': {'val': {'Integer': {'ival': 1}}, 'location': 7}}, 'location': 7}}], 'op': 0}}])
 
@@ -437,12 +437,12 @@ class TestQuery2Json(unittest.TestCase):
                          [{"COPY": {"relation": {"RANGEVAR": {"schemaname": None, "relname": "country", "inhOpt": 2, "relpersistence": "p", "alias": None, "location": 5}}, "query": None, "attlist": None, "is_from": True, "is_program": False, "filename": "/usr1/proj/bray/sql/country_data", "options": None}}])
 
     def test_copy_table_from_file(self):
-        print(sql2json('create view v1 as select a, b, c from t1 where c > 1'))
+        # print(sql2json('create view v1 as select a, b, c from t1 where c > 1'))
 
         self.assertEqual(sql2json('create view v1 as select a, b, c from t1 where c > 1'),
                                   [{'ViewStmt': {'view': {'RangeVar': {'relname': 'v1', 'relpersistence': 'p', 'location': 12, 'inhOpt': 2}}, 'query': {'SelectStmt': {'op': 0, 'whereClause': {'A_Expr': {'lexpr': {'ColumnRef': {'fields': [{'String': {'str': 'c'}}], 'location': 47}}, 'name': [{'String': {'str': '>'}}], 'kind': 0, 'location': 49, 'rexpr': {'A_Const': {'location': 51, 'val': {'Integer': {'ival': 1}}}}}}, 'targetList': [{'ResTarget': {'location': 25, 'val': {'ColumnRef': {'fields': [{'String': {'str': 'a'}}], 'location': 25}}}}, {'ResTarget': {'location': 28, 'val': {'ColumnRef': {'fields': [{'String': {'str': 'b'}}], 'location': 28}}}}, {'ResTarget': {'location': 31, 'val': {'ColumnRef': {'fields': [{'String': {'str': 'c'}}], 'location': 31}}}}], 'fromClause': [{'RangeVar': {'relname': 't1', 'relpersistence': 'p', 'location': 38, 'inhOpt': 2}}]}}, 'withCheckOption': 0}}])
 
     def test_create_table_t1(self):
-        print(sql2json('create table t1 (id int);'))
+        # print(sql2json('create table t1 (id int);'))
         self.assertEqual(sql2json('create table t1 (id int);'),
                                   [{'CreateStmt': {'oncommit': 0, 'relation': {'RangeVar': {'location': 13, 'relname': 't1', 'inhOpt': 2, 'relpersistence': 'p'}}, 'tableElts': [{'ColumnDef': {'typeName': {'TypeName': {'names': [{'String': {'str': 'pg_catalog'}}, {'String': {'str': 'int4'}}], 'typemod': -1, 'location': 20}}, 'location': 17, 'colname': 'id', 'is_local': True}}]}}])

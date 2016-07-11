@@ -2,46 +2,17 @@
 from .util import flatten, flatten1
 
 
-_QP = None
-
-def readline(f):
-    line = b''
-    while True:
-        #print('before read')
-        c = f.read(1)
-        print(c)
-        if not c:
-            return line.encode('utf8')
-        line += c
-        if c == '\n':
-            return line.encode('utf8')
-
-
 def sql2json(sqlstr):
-    if not isinstance(sqlstr, str):
-        raise TypeError
-    return sqljson_oneatatime(sqlstr)
-
-def xstr(s):
-    return s if s else ''
-
-def sqljson_oneatatime(sqlstr):
     import json
     from subprocess import Popen, PIPE
     try:
-        _QP = Popen(['./queryparser/queryparser', '--json'],
+        p = Popen(['./queryparser/queryparser', '--json'],
                     bufsize=0, stdin=PIPE, stderr=PIPE, stdout=PIPE)
-        instr = (xstr(sqlstr) + '\n-- queryparser flush\n').encode('utf8')
-        # print(instr)
-        outs, errs = _QP.communicate(instr)
-        # print(outs)
-        return json.loads(outs.decode('utf8')) if not _QP.returncode else None
-    except Exception as e:
-        print(e)
-        _QP.kill()
-        _QP = None
-        #raise e
-        return str(e)
+        instr = (sqlstr + '\n-- queryparser flush\n').encode('utf8')
+        outs, errs = p.communicate(instr)
+        return json.loads(outs.decode('utf8')) if not p.returncode else None
+    except:
+        raise
 
 
 class Stmt:
@@ -231,7 +202,7 @@ class Subquery(Stmt):
 
 class UnhandledStmt(Stmt):
     def __init__(self, k, v):
-        print(self.__class__.__name__, k, v)
+        # print(self.__class__.__name__, k, v)
         super().__init__(v)
         self.command = k
 
