@@ -45,45 +45,50 @@ void pypgsql_destroy(struct pypgsql *p)
 {
     free(p->in);
     p->in = NULL;
-    memset(&p->out, 0, sizeof p->out);
+    pg_query_free_parse_result(p->out);
 }
 
-static char * readinput(FILE *f)
+static int read_stmts_sql(struct pypgsql *p, FILE *f)
 {
     char buf[BUFSIZ];
     char *input = NULL;
     size_t inlen = 0;
-    while (fgets(buf, sizeof buf, f)) {
-        size_t tmplen;
-        char *tmp;
-        tmplen = inlen + strlen(buf);
-        tmp = realloc(input, (tmplen + 1) * sizeof *tmp);
-        if (!tmp) {
+    pypgsql_init(p);
+    while (!feof(f) && fgets(buf, sizeof buf, f)) {
+        size_t buflen;
+        buflen = strlen(buf);
+        if (buflen > 1 && buf[0] == '-' && strcmp(buf, "-- queryparser flush\n") == 0) {
             break;
         }
-        input = tmp;
-        inlen = tmplen;
+        {
+            char *tmp;
+            tmp = realloc(input, inlen + buflen + 1);
+            if (!tmp) {
+                break;
+            }
+            input = tmp;
+        }
         strcat(input, buf);
+        inlen += buflen;
     }
-    return input;
+    p->in = input;
+    return !!p->in;
+}
+
+static void write_stmts_json(struct pypgsql *p, FILE *f)
+{
+    p->out = pg_query_parse(p->in);
+    fputs(p->out.parse_tree, f);
+    fputc('\n', f);
+    fflush(f);
+    pypgsql_destroy(p);
 }
 
 int main(void)
 {
     struct pypgsql p;
-
-    pypgsql_init(&p);
-
-    p.in = readinput(stdin);
-
-    if (p.in) {
-        p.out = pg_query_parse(p.in);
-
-        fputs(p.out.parse_tree, stdout);
-        fputc('\n', stdout);
-
-        pypgsql_destroy(&p);
-    }
-
+    setvbuf(stdout, NULL, _IONBF, BUFSIZ);
+    while (read_stmts_sql(&p, stdin))
+        write_stmts_json(&p, stdout);
     return 0;
 }

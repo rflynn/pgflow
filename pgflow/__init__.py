@@ -2,24 +2,46 @@
 from .util import flatten, flatten1
 
 
-def sql2json(sqlstr):
+_QP = None
 
+def readline(f):
+    line = b''
+    while True:
+        #print('before read')
+        c = f.read(1)
+        print(c)
+        if not c:
+            return line.encode('utf8')
+        line += c
+        if c == '\n':
+            return line.encode('utf8')
+
+
+def sql2json(sqlstr):
+    if not isinstance(sqlstr, str):
+        raise TypeError
+    return sqljson_oneatatime(sqlstr)
+
+def xstr(s):
+    return s if s else ''
+
+def sqljson_oneatatime(sqlstr):
     import json
     from subprocess import Popen, PIPE
-
-    # NOTE: queryparser is the thinnest of commandline wrappers;
-    # to speed this up we'll need to avoid re-launching the program by
-    # modify queryparser to stay open and process multiple commands so we
-    # can keep the pipe open...
-    # or better yet build a proper python c module over it
-    p = Popen(['./queryparser/queryparser', '--json'],
-              stdin=PIPE, stderr=PIPE, stdout=PIPE)
     try:
-        outs, errs = p.communicate((sqlstr + '\n').encode('utf8'))
-        return json.loads(outs.decode('utf8')) if not p.returncode else None
-    except:
-        p.kill()
-        raise
+        _QP = Popen(['./queryparser/queryparser', '--json'],
+                    bufsize=0, stdin=PIPE, stderr=PIPE, stdout=PIPE)
+        instr = (xstr(sqlstr) + '\n-- queryparser flush\n').encode('utf8')
+        # print(instr)
+        outs, errs = _QP.communicate(instr)
+        # print(outs)
+        return json.loads(outs.decode('utf8')) if not _QP.returncode else None
+    except Exception as e:
+        print(e)
+        _QP.kill()
+        _QP = None
+        #raise e
+        return str(e)
 
 
 class Stmt:
