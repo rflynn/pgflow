@@ -112,7 +112,7 @@ Update:
         s = Stmt.from_tree(tree[0])
         # print(s)
         self.assertEqual(repr(s), """\
-Select:
+SelectStmt:
   op: 0
   targetList: [
     ResTarget:
@@ -120,7 +120,7 @@ Select:
       val: SubLink:
           location: 7
           subLinkType: 4
-          subselect: Select:
+          subselect: SelectStmt:
               op: 0
               targetList: [
                 ResTarget:
@@ -135,7 +135,7 @@ Select:
       val: SubLink:
           location: 19
           subLinkType: 4
-          subselect: Select:
+          subselect: SelectStmt:
               op: 0
               targetList: [
                 ResTarget:
@@ -178,7 +178,7 @@ InsertStmt:
       location: 12
       relname: 't1'
       relpersistence: 'p'
-  selectStmt: Select:
+  selectStmt: SelectStmt:
       fromClause: FromClause:
           [
             RangeVar:
@@ -224,9 +224,9 @@ CreateTableAs:
           location: 25
           relname: 'matview'
           relpersistence: 'p'
-  query: Select:
+  query: SelectStmt:
       all: True
-      larg: Select:
+      larg: SelectStmt:
           fromClause: FromClause:
               [
                 RangeVar:
@@ -246,7 +246,7 @@ CreateTableAs:
                   location: 111
           ]
       op: 1
-      rarg: Select:
+      rarg: SelectStmt:
           fromClause: FromClause:
               [
                 RangeVar:
@@ -269,7 +269,7 @@ CreateTableAs:
           ctes: [
             CommonTableExpr:
               ctename: 'a'
-              ctequery: Select:
+              ctequery: SelectStmt:
                   fromClause: FromClause:
                       [
                         RangeVar:
@@ -297,7 +297,7 @@ CreateTableAs:
               location: 41
             CommonTableExpr:
               ctename: 'b'
-              ctequery: Select:
+              ctequery: SelectStmt:
                   op: 0
                   targetList: [
                     ResTarget:

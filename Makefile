@@ -1,7 +1,7 @@
 # vim: set ts=8 noet:
 
 test: queryparser
-	venv/bin/nosetests --nocapture --with-coverage --cover-erase --cover-html
+	venv/bin/nosetests --nocapture --with-coverage --cover-erase --cover-html tests/*
 
 install: venv/bin/pip queryparser
 

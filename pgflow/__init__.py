@@ -2,33 +2,38 @@
 from .util import flatten, flatten1
 
 
-def sql2json(sqlstr):
-    import json
-    from subprocess import Popen, PIPE
-    try:
-        p = Popen(['./queryparser/queryparser', '--json'],
-                    bufsize=0, stdin=PIPE, stderr=PIPE, stdout=PIPE)
-        instr = (sqlstr + '\n-- queryparser flush\n').encode('utf8')
-        outs, errs = p.communicate(instr)
-        return json.loads(outs.decode('utf8')) if not p.returncode else None
-    except:
-        raise
+class Stmts:
+
+    def __init__(self, stmts):
+        self.stmts = stmts
+
+    def search(self, matchfunc):
+        return flatten1(s.search(matchfunc) for s in self.stmts)
+
+    def searchclass(self, cls):
+        return self.search(lambda x: isinstance(x, cls))
+
+    def __repr__(self):
+        return self.__class__.__name__ + ': ' + repr(self.stmts)
+
+    @staticmethod
+    def parse(sqlstr):
+        return Stmts(Stmt.from_tree(sql2json(sqlstr)))
 
 
 class Stmt:
 
     def __init__(self, tree):
         if isinstance(tree, dict):
-            tree_ = {k: Stmt.from_tree_key(k, v) for k, v in tree.items()}
-            for k, v in tree_.items():
+            tree = {k: Stmt.from_tree_key(k, v) for k, v in tree.items()}
+            for k, v in tree.items():
                 setattr(self, k, v)
         elif isinstance(tree, list):
-            tree_ = [Stmt.from_tree(t) for t in tree]
-        self.tree = tree_
+            tree = [Stmt.from_tree(t) for t in tree]
+        self.tree = tree
 
     @staticmethod
     def from_tree(tree):
-        # print('from_tree', tree)
         # recursively process tree picking out things we know and passing the
         # rest through unchanged
         if isinstance(tree, dict):
@@ -43,7 +48,6 @@ class Stmt:
 
     @staticmethod
     def from_tree_key(k, v):
-        # print('from_tree_key', k, v)
         c = Stmt.kwclass.get(k)
         if c:
             return c(v)
@@ -67,7 +71,25 @@ class Stmt:
     def __repr__(self):
         return self.dump()
 
-    def dumplist(self, v, indent=0):
+    def dump(self, indent=0):
+        indents = '  '
+        indent += 1
+        indentstr = indents * indent
+        s = self.__class__.__name__ + ':\n'
+        if isinstance(self.tree, list):
+            s += indentstr + self._dumplist(self.tree, indent=indent)
+        elif hasattr(self.tree, 'items'):
+            for k, v in sorted(self.tree.items()):
+                s += indentstr + k + ': '
+                if isinstance(v, Stmt):
+                    s += v.dump(indent=indent+1)
+                elif isinstance(v, list):
+                    s += self._dumplist(v, indent=indent)
+                else:
+                    s += repr(v) + '\n'
+        return s
+
+    def _dumplist(self, v, indent=0):
         indents = '  '
         indentstr = indents * indent
         s = '[\n'
@@ -80,23 +102,39 @@ class Stmt:
         s += indentstr + ']\n'
         return s
 
-    def dump(self, indent=0):
-        indents = '  '
-        indent += 1
-        indentstr = indents * indent
-        s = self.__class__.__name__ + ':\n'
-        if hasattr(self.tree, 'items'):
+    @staticmethod
+    def searchlist(val, matchfunc):
+        if hasattr(val, '__iter__') and not isinstance(val, str):
+            matches = []
+            for x in val:
+                if isinstance(x, Stmt):
+                    if matchfunc(x):
+                        matches.append(x)
+                    else:
+                        matches.extend(x.search(matchfunc))
+                elif hasattr(x, '__iter__') and not isinstance(val, str):
+                    matches.extend(Stmt.searchlist(x, matchfunc))
+            return matches
+        return []
+
+    def search(self, matchfunc):
+        if matchfunc(self):
+            return [self]
+        elif hasattr(self.tree, 'items'):
+            matches = []
             for k, v in sorted(self.tree.items()):
-                s += indentstr + k + ': '
                 if isinstance(v, Stmt):
-                    s += v.dump(indent=indent+1)
-                elif isinstance(v, list):
-                    s += self.dumplist(v, indent=indent)
-                else:
-                    s += repr(v) + '\n'
-        elif isinstance(self.tree, list):
-            s += indentstr + self.dumplist(self.tree, indent=indent)
-        return s
+                    if matchfunc(v):
+                        matches.append(v)
+                    else:
+                        matches.extend(v.search(matchfunc))
+                elif hasattr(v, '__iter__') and not isinstance(v, str):
+                    matches.extend(Stmt.searchlist(self, matchfunc))
+                elif matchfunc(v):
+                    matches.append(v)
+            return matches
+        elif hasattr(self.tree, '__iter__'):
+            return Stmt.searchlist(self, matchfunc)
 
 
 class AConst(Stmt): pass
@@ -139,6 +177,8 @@ class CreateView(Stmt):
         return self.query.enumerate_from()
     def get_dest(self):
         return [repr(RelName.fromRangeVar(self.view))]
+
+class DropStmt(Stmt): pass
 
 class FromClause(Stmt):
     def enumerate_tables(self):
@@ -184,7 +224,7 @@ class ResTarget(Stmt):
     def __lt__(self, other):
         return self.tree.items() < other.tree.items()
 
-class Select(Stmt):
+class SelectStmt(Stmt):
     def enumerate_from(self):
         fc = self.fromClause.enumerate_tables() if hasattr(self, 'fromClause') else []
         vl = self.valuesLists.enumerate_tables() if hasattr(self, 'valuesLists') else []
@@ -205,6 +245,7 @@ class UnhandledStmt(Stmt):
         # print(self.__class__.__name__, k, v)
         super().__init__(v)
         self.command = k
+        self.v = v
 
 class Update(Stmt):
     def maybe_src_dest(self):
@@ -244,6 +285,7 @@ Stmt.kwclass = {
     'CopyStmt': Copy,
     'CreateStmt': CreateTable,
     'CreateTableAsStmt': CreateTableAs,
+    'DropStmt': DropStmt,
     'InsertStmt': InsertStmt,
     'Integer': Integer,
     'IntoClause': IntoClause,
@@ -253,7 +295,7 @@ Stmt.kwclass = {
     'RangeVar': RangeVar,
     'RefreshMatViewStmt': RefreshMatView,
     'ResTarget': ResTarget,
-    'SelectStmt': Select,
+    'SelectStmt': SelectStmt,
     'String': String,
     'SubLink': SubLink,
     'UpdateStmt': Update,
@@ -263,6 +305,20 @@ Stmt.kwclass = {
     'subquery': Subquery,
     'valuesLists': ValuesLists,
 }
+
+
+def sql2json(sqlstr):
+    import json
+    from subprocess import Popen, PIPE
+    try:
+        p = Popen(['./queryparser/queryparser', '--json'],
+                    bufsize=0, stdin=PIPE, stderr=PIPE, stdout=PIPE)
+        instr = (sqlstr + '\n-- queryparser flush\n').encode('utf8')
+        outs, errs = p.communicate(instr)
+        return json.loads(outs.decode('utf8')) if not p.returncode else None
+    except:
+        p.kill()
+        raise
 
 
 class RelName:
